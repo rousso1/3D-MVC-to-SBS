@@ -21,11 +21,8 @@ Run everything natively using Wine CrossOver (which uses Rosetta 2 on Apple Sili
 # Install dependencies (idempotent — safe to run multiple times)
 bash setup-mac.sh
 
-# Convert a movie (subtitles are dropped by default)
+# Convert a movie
 ./convert.sh input/movie.mkv output/movie_sbs.mkv
-
-# Keep subtitle tracks
-./convert.sh -s input/movie.mkv output/movie_sbs.mkv
 ```
 
 **What `setup-mac.sh` installs:**
@@ -42,17 +39,11 @@ For Linux servers, NAS devices, or any x86_64 machine. The Docker image includes
 # Build the image (once)
 docker build -t mvc-to-sbs .
 
-# Convert a movie (subtitles are dropped by default)
+# Convert a movie
 docker run --rm \
   -v ./input:/input \
   -v ./output:/output \
   mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv
-
-# Keep subtitle tracks
-docker run --rm \
-  -v ./input:/input \
-  -v ./output:/output \
-  mvc-to-sbs -s /input/movie.mkv /output/movie_sbs.mkv
 ```
 
 > **Important:** Build and run on x86_64 Linux only. This image will **not** build or run on Apple Silicon Macs via Docker Desktop — Wine cannot operate under QEMU's x86 emulation due to ARM/x86 page size incompatibilities (16K vs 4K). macOS users should use Option A instead.
@@ -62,7 +53,7 @@ docker run --rm \
 1. Detect video framerate and resolution via `ffprobe`
 2. Extract H.264/MVC bitstream via `mkvextract`
 3. Decode MVC to raw SBS via `FRIMDecode64 -sw`, pipe to `ffmpeg` (libx264, CRF 18)
-4. Mux SBS video with original audio via `mkvmerge` (subtitles dropped unless `-s` flag is used)
+4. Mux SBS video with original audio and subtitles via `mkvmerge` (subtitle default flag set to off)
 5. Remux via `ffmpeg` to fix container metadata for Plex compatibility
 
 ## Input
