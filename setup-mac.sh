@@ -27,7 +27,7 @@ fi
 echo ""
 
 # Step 2: Homebrew
-if command -v brew &>/dev/null; then
+if command -v brew >/dev/null 2>&1; then
   echo "[2/5] Homebrew already installed, skipping..."
 else
   echo "[2/5] Installing Homebrew..."
@@ -45,7 +45,7 @@ else
   echo "  gcenx/wine tap already added."
 fi
 
-if brew list --cask wine-crossover &>/dev/null; then
+if brew list --cask wine-crossover >/dev/null 2>&1; then
   echo "  wine-crossover already installed."
 else
   echo "  Installing wine-crossover..."
@@ -53,7 +53,7 @@ else
 fi
 
 for pkg in mkvtoolnix ffmpeg; do
-  if brew list "$pkg" &>/dev/null; then
+  if brew list "$pkg" >/dev/null 2>&1; then
     echo "  $pkg already installed."
   else
     echo "  Installing $pkg..."
