@@ -4,40 +4,66 @@ Converts 3D MVC (Multi-View Coding) Blu-ray MKV files to Side-by-Side (SBS) form
 
 Uses [FRIMDecode64](https://www.videohelp.com/software/FRIM) v1.29 via Wine to decode the MVC bitstream, then encodes to H.264 SBS with ffmpeg.
 
+## Which option should I use?
+
+| Platform | Option |
+|---|---|
+| **macOS** (Intel or Apple Silicon) | [Option A: macOS](#option-a-macos-intel-or-apple-silicon) — native install via Homebrew |
+| **Linux x86_64** (servers, NAS, desktops) | [Option B: Docker](#option-b-docker-x86_64-linux) — containerized, no host dependencies |
+| **Windows** | Not supported (use FRIMDecode natively instead) |
+| **Apple Silicon + Docker** | **Will not work** — Wine cannot run under Docker's x86 emulation on ARM due to page size incompatibilities. Use Option A instead. |
+
+## Option A: macOS (Intel or Apple Silicon)
+
+Run everything natively using Wine CrossOver (which uses Rosetta 2 on Apple Silicon for x86 translation).
+
+```bash
+# Install dependencies (idempotent — safe to run multiple times)
+bash setup-mac.sh
+
+# Convert a movie (subtitles are dropped by default)
+./convert.sh input/movie.mkv output/movie_sbs.mkv
+
+# Keep subtitle tracks
+./convert.sh -s input/movie.mkv output/movie_sbs.mkv
+```
+
+**What `setup-mac.sh` installs:**
+- Rosetta 2 (Apple Silicon only)
+- Wine CrossOver via Homebrew (`gcenx/wine` tap)
+- mkvtoolnix, ffmpeg via Homebrew
+- FRIMDecode64 v1.29
+
+## Option B: Docker (x86_64 Linux)
+
+For Linux servers, NAS devices, or any x86_64 machine. The Docker image includes Wine, FRIMDecode64, mkvtoolnix, and ffmpeg — no host dependencies needed.
+
+```bash
+# Build the image (once)
+docker build -t mvc-to-sbs .
+
+# Convert a movie (subtitles are dropped by default)
+docker run --rm \
+  -v ./input:/input \
+  -v ./output:/output \
+  mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv
+
+# Keep subtitle tracks
+docker run --rm \
+  -v ./input:/input \
+  -v ./output:/output \
+  mvc-to-sbs -s /input/movie.mkv /output/movie_sbs.mkv
+```
+
+> **Important:** This image is `linux/amd64` only. It will **not** work on Apple Silicon Macs via Docker Desktop — use Option A instead.
+
 ## Pipeline
 
 1. Detect video framerate and resolution via `ffprobe`
 2. Extract H.264/MVC bitstream via `mkvextract`
 3. Decode MVC to raw SBS via `FRIMDecode64 -sw`, pipe to `ffmpeg` (libx264, CRF 18)
-4. Mux SBS video with original audio/subtitles via `mkvmerge`
+4. Mux SBS video with original audio via `mkvmerge` (subtitles dropped unless `-s` flag is used)
 5. Remux via `ffmpeg` to fix container metadata for Plex compatibility
-
-## Option A: macOS (Intel or Apple Silicon)
-
-```bash
-# Install dependencies (idempotent)
-bash setup-mac.sh
-
-# Convert a movie
-./convert.sh input/movie.mkv output/movie_sbs.mkv
-```
-
-The setup script installs: Rosetta 2 (Apple Silicon only), Wine CrossOver (gcenx tap), mkvtoolnix, ffmpeg, and FRIMDecode64.
-
-## Option B: Docker (x86_64 Linux)
-
-```bash
-# Build the image
-docker build -t mvc-to-sbs .
-
-# Convert a movie
-docker run --rm \
-  -v ./input:/input \
-  -v ./output:/output \
-  mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv
-```
-
-> **Note:** The Docker image is `linux/amd64` only. Docker + Wine does not work on Apple Silicon Macs due to ARM/x86 page size incompatibilities.
 
 ## Input
 

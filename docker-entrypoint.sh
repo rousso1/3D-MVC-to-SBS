@@ -2,10 +2,20 @@
 set -euo pipefail
 
 # MVC to SBS conversion script (Docker)
-# Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv
+# Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-s] /input/movie.mkv /output/movie_sbs.mkv
+# -s  Keep subtitle tracks (dropped by default)
+
+KEEP_SUBS=false
+while getopts "s" opt; do
+  case $opt in
+    s) KEEP_SUBS=true ;;
+    *) echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-s] /input/movie.mkv /output/movie_sbs.mkv"; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
 
 if [ $# -lt 2 ]; then
-  echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv"
+  echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-s] /input/movie.mkv /output/movie_sbs.mkv"
   exit 1
 fi
 
@@ -22,6 +32,7 @@ SBS_VIDEO_PATH="${OUTPUT_DIR}/${BASENAME}_sbs_video.mkv"
 echo "=== MVC to SBS Converter (Docker) ==="
 echo "Input:  $INPUT_PATH"
 echo "Output: $OUTPUT_PATH"
+echo "Subtitles: $(if $KEEP_SUBS; then echo "keep"; else echo "drop (use -s to keep)"; fi)"
 echo ""
 
 # Step 1: Extract framerate and resolution
@@ -63,12 +74,15 @@ else
 fi
 echo ""
 
-# Step 4: Mux SBS video with original audio and subtitles using mkvmerge
-echo "[4/5] Muxing SBS video with original audio and subtitles..."
+# Step 4: Mux SBS video with original audio (and optionally subtitles) using mkvmerge
+echo "[4/5] Muxing SBS video with original audio..."
 MUXED_PATH="${OUTPUT_DIR}/${BASENAME}_muxed.mkv"
-mkvmerge -o "$MUXED_PATH" \
-  "$SBS_VIDEO_PATH" \
-  --no-video "$INPUT_PATH"
+MKVMERGE_ARGS=(-o "$MUXED_PATH" "$SBS_VIDEO_PATH" --no-video)
+if ! $KEEP_SUBS; then
+  MKVMERGE_ARGS+=(--no-subtitles)
+fi
+MKVMERGE_ARGS+=("$INPUT_PATH")
+mkvmerge "${MKVMERGE_ARGS[@]}"
 
 # Step 5: Remux with ffmpeg to write proper container metadata (duration, bitrate)
 # mkvmerge leaves these as N/A which causes Plex playback errors
