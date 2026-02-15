@@ -123,7 +123,7 @@ else
 
   wine64 "$FRIM_EXE" -sw -i:mvc "$BITSTREAM_PATH" -o - -sbs | \
     ffmpeg -y -nostats -f rawvideo -s:v "$DOUBLE_RESOLUTION" -r "$FRAMERATE" -i - \
-    "${VFILTER[@]}" -c:v libx264 -preset medium -crf 18 \
+    ${VFILTER[@]+"${VFILTER[@]}"} -c:v libx264 -preset medium -crf 18 \
     -progress "$PROGRESS_FILE" "$SBS_VIDEO_PATH"
 
   # Cleanup monitor
