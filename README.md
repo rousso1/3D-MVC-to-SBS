@@ -10,7 +10,7 @@ Uses [FRIMDecode64](https://www.videohelp.com/software/FRIM) v1.29 via Wine to d
 |---|---|
 | **macOS** (Intel or Apple Silicon) | [Option A: macOS](#option-a-macos-intel-or-apple-silicon) — native install via Homebrew |
 | **Linux x86_64** (servers, NAS, desktops) | [Option B: Docker](#option-b-docker-x86_64-linux) — containerized, no host dependencies |
-| **Windows** | Not supported (use FRIMDecode natively instead) |
+| **Windows** | No setup needed — run [FRIMDecode64](https://www.videohelp.com/software/FRIM) natively (no Wine required). Install [mkvtoolnix](https://mkvtoolnix.download/) and [ffmpeg](https://ffmpeg.org/download.html), then follow the same pipeline steps manually or adapt `convert.sh` for PowerShell/WSL. |
 | **Apple Silicon + Docker** | **Will not work** — Wine cannot run under Docker's x86 emulation on ARM due to page size incompatibilities. Use Option A instead. |
 
 ## Option A: macOS (Intel or Apple Silicon)
