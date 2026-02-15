@@ -1,0 +1,6 @@
+input/
+output/
+tools/
+.DS_Store
+.git
+.claude

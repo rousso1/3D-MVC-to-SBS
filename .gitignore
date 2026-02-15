@@ -1,0 +1,6 @@
+input/
+output/
+tools/
+repo/
+.DS_Store
+*.h264
