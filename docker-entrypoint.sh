@@ -2,10 +2,20 @@
 set -euo pipefail
 
 # MVC to SBS conversion script (Docker)
-# Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv
+# Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-c] /input/movie.mkv /output/movie_sbs.mkv
+# -c  Crop black bars (for VR headsets; may cause stretching on TVs)
+
+CROP_ENABLED=false
+while getopts "c" opt; do
+  case $opt in
+    c) CROP_ENABLED=true ;;
+    *) echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-c] /input/movie.mkv /output/movie_sbs.mkv"; exit 1 ;;
+  esac
+done
+shift $((OPTIND - 1))
 
 if [ $# -lt 2 ]; then
-  echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs /input/movie.mkv /output/movie_sbs.mkv"
+  echo "Usage: docker run --rm -v ./input:/input -v ./output:/output mvc-to-sbs [-c] /input/movie.mkv /output/movie_sbs.mkv"
   exit 1
 fi
 
@@ -42,22 +52,24 @@ echo "  Resolution: ${WIDTH}x${HEIGHT}"
 echo "  Duration: ${DURATION_SECS}s (~$TOTAL_FRAMES frames)"
 echo "  SBS raw resolution: $DOUBLE_RESOLUTION"
 
-# Auto-detect black bars via cropdetect on the source
-echo "  Detecting black bars..."
 CROP_FILTER=""
-CROP_LINE=$(ffmpeg -ss 300 -i "$INPUT_PATH" -vframes 10 -vf cropdetect=24:16:0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}') || true
-if [ -n "$CROP_LINE" ]; then
-  CROP_H=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f2)
-  CROP_Y=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f4)
-  if [ "$CROP_H" -lt "$HEIGHT" ]; then
-    CROP_FILTER="crop=${DOUBLE_WIDTH}:${CROP_H}:0:${CROP_Y}"
-    echo "  Detected: $CROP_LINE -> SBS crop: $CROP_FILTER"
-    echo "  Output SBS resolution: ${DOUBLE_WIDTH}x${CROP_H}"
+if $CROP_ENABLED; then
+  # Auto-detect black bars via cropdetect on the source
+  echo "  Detecting black bars..."
+  CROP_LINE=$(ffmpeg -ss 300 -i "$INPUT_PATH" -vframes 10 -vf cropdetect=24:16:0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}') || true
+  if [ -n "$CROP_LINE" ]; then
+    CROP_H=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f2)
+    CROP_Y=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f4)
+    if [ "$CROP_H" -lt "$HEIGHT" ]; then
+      CROP_FILTER="crop=${DOUBLE_WIDTH}:${CROP_H}:0:${CROP_Y}"
+      echo "  Crop: $CROP_LINE -> SBS crop: $CROP_FILTER"
+      echo "  Cropped SBS resolution: ${DOUBLE_WIDTH}x${CROP_H}"
+    else
+      echo "  No significant black bars detected."
+    fi
   else
-    echo "  No significant black bars detected."
+    echo "  Could not detect crop, skipping."
   fi
-else
-  echo "  Could not detect crop, skipping."
 fi
 echo ""
 
