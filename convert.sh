@@ -42,7 +42,25 @@ DOUBLE_RESOLUTION="${DOUBLE_WIDTH}x${HEIGHT}"
 
 echo "  Framerate: $FRAMERATE"
 echo "  Resolution: ${WIDTH}x${HEIGHT}"
-echo "  SBS Resolution: $DOUBLE_RESOLUTION"
+echo "  SBS raw resolution: $DOUBLE_RESOLUTION"
+
+# Auto-detect black bars via cropdetect on the source
+echo "  Detecting black bars..."
+CROP_FILTER=""
+CROP_LINE=$(ffmpeg -ss 300 -i "$INPUT_PATH" -vframes 10 -vf cropdetect=24:16:0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}') || true
+if [ -n "$CROP_LINE" ]; then
+  CROP_H=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f2)
+  CROP_Y=$(echo "$CROP_LINE" | cut -d= -f2 | cut -d: -f4)
+  if [ "$CROP_H" -lt "$HEIGHT" ]; then
+    CROP_FILTER="crop=${DOUBLE_WIDTH}:${CROP_H}:0:${CROP_Y}"
+    echo "  Detected: $CROP_LINE -> SBS crop: $CROP_FILTER"
+    echo "  Output SBS resolution: ${DOUBLE_WIDTH}x${CROP_H}"
+  else
+    echo "  No significant black bars detected."
+  fi
+else
+  echo "  Could not detect crop, skipping."
+fi
 echo ""
 
 # Step 2: Extract H.264/MVC bitstream from MKV
@@ -62,9 +80,13 @@ if [ -f "$SBS_VIDEO_PATH" ]; then
   echo "  Size: $(du -h "$SBS_VIDEO_PATH" | cut -f1)"
 else
   echo "[3/5] Decoding MVC to SBS using FRIMDecode (this will take a while)..."
+  VFILTER=()
+  if [ -n "$CROP_FILTER" ]; then
+    VFILTER=(-vf "$CROP_FILTER")
+  fi
   wine64 "$FRIM_EXE" -sw -i:mvc "$BITSTREAM_PATH" -o - -sbs | \
     ffmpeg -y -f rawvideo -s:v "$DOUBLE_RESOLUTION" -r "$FRAMERATE" -i - \
-    -c:v libx264 -preset medium -crf 18 "$SBS_VIDEO_PATH"
+    "${VFILTER[@]}" -c:v libx264 -preset medium -crf 18 "$SBS_VIDEO_PATH"
   echo "  SBS video encoded: $(du -h "$SBS_VIDEO_PATH" | cut -f1)"
 fi
 echo ""
