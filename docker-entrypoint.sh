@@ -34,8 +34,12 @@ HEIGHT=$(echo "$RESOLUTION" | cut -dx -f2)
 DOUBLE_WIDTH=$((WIDTH * 2))
 DOUBLE_RESOLUTION="${DOUBLE_WIDTH}x${HEIGHT}"
 
+DURATION_SECS=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$INPUT_PATH")
+TOTAL_FRAMES=$(awk "BEGIN {printf \"%d\", $DURATION_SECS * $FRAMERATE}" 2>/dev/null) || TOTAL_FRAMES=0
+
 echo "  Framerate: $FRAMERATE"
 echo "  Resolution: ${WIDTH}x${HEIGHT}"
+echo "  Duration: ${DURATION_SECS}s (~$TOTAL_FRAMES frames)"
 echo "  SBS raw resolution: $DOUBLE_RESOLUTION"
 
 # Auto-detect black bars via cropdetect on the source
@@ -73,14 +77,43 @@ if [ -f "$SBS_VIDEO_PATH" ]; then
   echo "[3/5] SBS video already encoded, skipping..."
   echo "  Size: $(du -h "$SBS_VIDEO_PATH" | cut -f1)"
 else
-  echo "[3/5] Decoding MVC to SBS using FRIMDecode (this will take a while)..."
+  echo "[3/5] Decoding MVC to SBS using FRIMDecode + ffmpeg encode..."
   VFILTER=()
   if [ -n "$CROP_FILTER" ]; then
     VFILTER=(-vf "$CROP_FILTER")
   fi
+
+  PROGRESS_FILE="${OUTPUT_DIR}/${BASENAME}_encode_progress"
+  SCRIPT_PID=$$
+
+  # Background progress reporter (prints every 30s)
+  if [ "$TOTAL_FRAMES" -gt 0 ] 2>/dev/null; then
+    (
+      sleep 15
+      while kill -0 $SCRIPT_PID 2>/dev/null; do
+        FRAME=$(grep '^frame=' "$PROGRESS_FILE" 2>/dev/null | tail -1 | cut -d= -f2)
+        if [ -n "$FRAME" ] && [ "$FRAME" -gt 0 ] 2>/dev/null; then
+          PCT=$((FRAME * 100 / TOTAL_FRAMES))
+          SPEED=$(grep '^speed=' "$PROGRESS_FILE" 2>/dev/null | tail -1 | cut -d= -f2)
+          echo "  Progress: $FRAME / $TOTAL_FRAMES frames ($PCT%) — speed: $SPEED"
+        fi
+        sleep 30
+      done
+    ) &
+    MONITOR_PID=$!
+  fi
+
   wine64 "$FRIM_EXE" -sw -i:mvc "$BITSTREAM_PATH" -o - -sbs | \
-    ffmpeg -y -f rawvideo -s:v "$DOUBLE_RESOLUTION" -r "$FRAMERATE" -i - \
-    "${VFILTER[@]}" -c:v libx264 -preset medium -crf 18 "$SBS_VIDEO_PATH"
+    ffmpeg -y -nostats -f rawvideo -s:v "$DOUBLE_RESOLUTION" -r "$FRAMERATE" -i - \
+    "${VFILTER[@]}" -c:v libx264 -preset medium -crf 18 \
+    -progress "$PROGRESS_FILE" "$SBS_VIDEO_PATH"
+
+  # Cleanup monitor
+  if [ -n "${MONITOR_PID:-}" ]; then
+    kill $MONITOR_PID 2>/dev/null || true
+    wait $MONITOR_PID 2>/dev/null || true
+  fi
+  rm -f "$PROGRESS_FILE"
   echo "  SBS video encoded: $(du -h "$SBS_VIDEO_PATH" | cut -f1)"
 fi
 echo ""
