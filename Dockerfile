@@ -1,6 +1,10 @@
 # MVC-to-SBS Converter — x86_64 Linux (Docker)
 # Converts 3D MVC Blu-ray MKVs to Side-by-Side format
-# Platform: linux/amd64 only (Wine cannot run under ARM emulation)
+#
+# IMPORTANT: Build and run on x86_64 Linux only.
+# This image will NOT build or run on Apple Silicon Macs (even via Docker Desktop)
+# because Wine cannot operate under QEMU's x86 emulation (ARM 16K page size vs
+# Wine's expected 4K pages). macOS users should use setup-mac.sh instead.
 
 FROM debian:bookworm
 

@@ -55,7 +55,7 @@ docker run --rm \
   mvc-to-sbs -s /input/movie.mkv /output/movie_sbs.mkv
 ```
 
-> **Important:** This image is `linux/amd64` only. It will **not** work on Apple Silicon Macs via Docker Desktop — use Option A instead.
+> **Important:** Build and run on x86_64 Linux only. This image will **not** build or run on Apple Silicon Macs via Docker Desktop — Wine cannot operate under QEMU's x86 emulation due to ARM/x86 page size incompatibilities (16K vs 4K). macOS users should use Option A instead.
 
 ## Pipeline
 
