@@ -1,8 +1,10 @@
 # 3D MVC-to-SBS Converter
 
-Converts 3D MVC (Multi-View Coding) Blu-ray MKV files to Side-by-Side (SBS) format, compatible with Plex VR players and 3D TVs.
+Converts 3D Blu-ray MKV files to Side-by-Side (SBS) format, compatible with Plex VR players and 3D TVs.
 
-Uses [FRIMDecode64](https://www.videohelp.com/software/FRIM) v1.29 via Wine to decode the MVC bitstream, then encodes to H.264 SBS with ffmpeg.
+Supports two types of 3D input:
+- **MVC (Multi-View Coding)** — standard 3D Blu-ray format. Uses [FRIMDecode64](https://www.videohelp.com/software/FRIM) v1.29 via Wine to decode the MVC bitstream, then encodes to H.264 SBS with ffmpeg.
+- **Frame-sequential** — alternating left/right eye frames at double framerate (e.g. ~48fps). Converted directly with ffmpeg's `stereo3d` filter — no Wine or FRIMDecode needed.
 
 ## Which option should I use?
 
@@ -74,11 +76,44 @@ docker run --rm \
 
 ## Input
 
-MKV files ripped from 3D Blu-ray discs with [MakeMKV](https://www.makemkv.com/). The MKV must contain an H.264/MVC video track.
+MKV files ripped from 3D Blu-ray discs with [MakeMKV](https://www.makemkv.com/). The MKV must contain either:
+- An **H.264/MVC** video track (standard 3D Blu-ray) — use `convert.sh`
+- A **frame-sequential** H.264 track (~48fps, alternating L/R frames) — use the manual ffmpeg method below
 
-## Intermediate Files
+## Frame-Sequential 3D (manual conversion)
 
-The converter creates intermediate files next to the output to allow resuming if a step fails:
+Some 3D MKV files are already re-encoded from MVC to frame-sequential format (alternating left/right eye frames at ~48fps). These don't need FRIMDecode or Wine — just ffmpeg.
+
+**How to identify:** Run `ffprobe` on the file. Frame-sequential files show ~48fps framerate and may have `stereo3d: frame alternate` or `stereo_mode: block_lr` metadata.
+
+> **Note:** ffmpeg 8.0 has a bug where re-encoding frame-sequential files with stereo3d side data fails (`Task finished with error code: -17`). The workaround is to extract the raw H.264 bitstream first (stripping the container metadata), then re-encode.
+
+```bash
+INPUT="input/movie.mkv"
+OUTPUT="output/movie_sbs.mkv"
+
+# Step 1: Extract raw H.264 bitstream (fast, stream copy)
+ffmpeg -y -i "$INPUT" -c:v copy -an -sn -bsf:v h264_mp4toannexb raw.h264
+
+# Step 2: Re-encode to SBS + mux audio/subs from original
+ffmpeg -y -r 48000/1001 -i raw.h264 -i "$INPUT" \
+  -filter_complex "[0:v]stereo3d=al:sbsl[v]" \
+  -map "[v]" -map 1:a -map "1:s?" \
+  -r 24000/1001 \
+  -c:v libx264 -preset medium -crf 18 \
+  -c:a copy -c:s copy \
+  -disposition:s 0 \
+  "$OUTPUT"
+
+# Step 3: Clean up
+rm raw.h264
+```
+
+The `stereo3d=al:sbsl` filter takes alternating-frame input (`al`) and produces full side-by-side output (`sbsl`) at 3840x1080. Adjust `-r` values if your source uses a different framerate (check with `ffprobe`).
+
+## Intermediate Files (MVC conversion)
+
+The MVC converter creates intermediate files next to the output to allow resuming if a step fails:
 - `*_bitstream.h264` — raw MVC bitstream (~same size as input)
 - `*_sbs_video.mkv` — SBS video before audio mux
 
